@@ -33,13 +33,9 @@ export class BackgroundWorkerSystem {
     const healthWorker = setInterval(() => this.runProviderHealthWorker(), 5 * 60 * 1000);
     this.intervals.push(healthWorker);
 
-    // Run initial cycle after brief initialization
-    setTimeout(() => {
-      this.runWeatherIngestionWorker();
-      this.runWarningIngestionWorker();
-      this.runPlanConflictWorker();
-      this.runProviderHealthWorker();
-    }, 2000);
+    // Do not run all ingestion jobs during process startup.
+    // Let the HTTP server become responsive first; scheduled intervals handle ingestion.
+
   }
 
   stop(): void {
@@ -54,7 +50,7 @@ export class BackgroundWorkerSystem {
    */
   async runWeatherIngestionWorker(): Promise<void> {
     try {
-      const locRes = await db.query('SELECT * FROM locations WHERE is_saved = true LIMIT 30');
+      const locRes = await db.query('SELECT * FROM locations WHERE is_saved = true LIMIT 10');
       const locations = locRes.rows;
 
       for (const loc of locations) {
