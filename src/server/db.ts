@@ -38,8 +38,16 @@ class DatabaseManager {
 
     const dbUrl = process.env.DATABASE_URL;
     
+    // Production deployments must use the provisioned external PostgreSQL database.
+    // Accept both standard PostgreSQL URL schemes used by hosted providers.
+    const isPostgresUrl = !!dbUrl && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://'));
+
+    if (process.env.NODE_ENV === 'production' && !isPostgresUrl) {
+      throw new Error('[Database] DATABASE_URL is missing or is not a valid PostgreSQL connection URL.');
+    }
+
     // Check if external Postgres connection is viable
-    if (dbUrl && dbUrl.startsWith('postgres://') && !dbUrl.includes('localhost:5432/trinetra_mausam')) {
+    if (isPostgresUrl && !dbUrl!.includes('localhost:5432/trinetra_mausam')) {
       try {
         console.log('[Database] Attempting connection to external PostgreSQL...');
         const pool = new Pool({
@@ -51,6 +59,9 @@ class DatabaseManager {
         this.isExternalPg = true;
         console.log('[Database] Connected to external PostgreSQL database.');
       } catch (err: any) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error('[Database] External PostgreSQL connection failed in production: ' + err.message);
+        }
         console.warn('[Database] External PostgreSQL unreachable, falling back to embedded persistent PostgreSQL (PGlite).', err.message);
       }
     }
