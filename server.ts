@@ -126,10 +126,7 @@ async function startServer() {
     console.log('[Trinetra] Initializing database...');
     await db.init();
 
-    // 2. Start Ingestion Workers
-    backgroundWorkers.start();
-
-    // 3. Mount Frontend
+    // 2. Mount Frontend
     if (isProd) {
       console.log('[Trinetra] Serving production build from dist/');
       app.use(express.static(path.resolve(__dirname, 'dist')));
@@ -152,6 +149,9 @@ async function startServer() {
       console.log(`  "From Weather Data to Weather-Smart Decisions"`);
       console.log(`  Operational on http://0.0.0.0:${PORT}`);
       console.log(`========================================================`);
+
+      // Start background ingestion only after the HTTP server is listening.
+      backgroundWorkers.start();
     });
   } catch (err: any) {
     console.error('[Trinetra] Fatal startup failure:', err);
