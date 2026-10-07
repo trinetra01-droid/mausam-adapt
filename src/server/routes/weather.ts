@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { imdProvider } from '../providers/imd.js';
+import { IMDRadarService } from '../providers/imdRadar.js';
 import { cache } from '../cache.js';
 import { db } from '../db.js';
 
@@ -113,3 +114,46 @@ weatherRouter.get('/nowcast', async (req: Request, res: Response) => {
     res.status(500).json({ error: `Nowcast retrieval error: ${err.message}` });
   }
 });
+
+// RAIN AROUND YOU - Doppler Weather Radar & Spatial Precipitation Field
+weatherRouter.get('/radar-rain', async (req: Request, res: Response) => {
+  try {
+    const lat = parseFloat(req.query.lat as string) || 28.5847;
+    const lng = parseFloat(req.query.lng as string) || 77.2066;
+    const district = (req.query.district as string) || 'New Delhi';
+    const state = (req.query.state as string) || 'Delhi';
+    let precipMm = req.query.precip_mm !== undefined ? parseFloat(req.query.precip_mm as string) : undefined;
+    let condition = (req.query.condition as string) || '';
+
+    if (precipMm === undefined) {
+      try {
+        const obs = await imdProvider.getCurrentObservation(district, state, lat, lng);
+        precipMm = obs.rainfall_mm ?? 0;
+        condition = obs.condition_text || '';
+      } catch (_) {
+        precipMm = 0;
+      }
+    }
+
+    const cacheKey = `wx:radar-rain:${lat.toFixed(2)}:${lng.toFixed(2)}:${(precipMm || 0).toFixed(1)}`;
+    const { data: radarReport, isStale } = await cache.fetchWithSWR(
+      cacheKey,
+      () => IMDRadarService.getRainAroundYou(lat, lng, district, state, precipMm || 0, condition),
+      180, // 3 min radar sweep cycle
+      600  // 10 min SWR
+    );
+
+    if (isStale && radarReport.provenance?.freshnessState === 'OFFICIAL_LIVE') {
+      radarReport.provenance.freshnessState = 'OFFICIAL_CACHED';
+    }
+
+    res.json(radarReport);
+  } catch (err: any) {
+    res.status(503).json({
+      error: 'Rain map unavailable',
+      status: 'UNAVAILABLE',
+      detail: err.message
+    });
+  }
+});
+

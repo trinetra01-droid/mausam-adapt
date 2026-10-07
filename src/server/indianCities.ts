@@ -11,6 +11,10 @@ export interface IndianCity {
 export const INDIAN_CITIES_CATALOG: IndianCity[] = [
   // --- National Capital Territory of Delhi ---
   { name: 'New Delhi (Safdarjung)', district: 'New Delhi', state: 'Delhi', lat: 28.5847, lng: 77.2066, type: 'home' },
+  { name: 'Chandni Chowk, Delhi', district: 'Central Delhi', state: 'Delhi', lat: 28.6506, lng: 77.2303, type: 'destination' },
+  { name: 'Nehru Place, Delhi', district: 'South East Delhi', state: 'Delhi', lat: 28.5494, lng: 77.2526, type: 'work' },
+  { name: 'Connaught Place (CP), Delhi', district: 'New Delhi', state: 'Delhi', lat: 28.6304, lng: 77.2177, type: 'work' },
+  { name: 'Lajpat Nagar (Central Market), Delhi', district: 'South Delhi', state: 'Delhi', lat: 28.5677, lng: 77.2433, type: 'destination' },
   { name: 'Central Delhi (Connaught Place)', district: 'Central Delhi', state: 'Delhi', lat: 28.6315, lng: 77.2167, type: 'work' },
   { name: 'South Delhi (Saket)', district: 'South Delhi', state: 'Delhi', lat: 28.5245, lng: 77.2066, type: 'home' },
   { name: 'North Delhi (Civil Lines)', district: 'North Delhi', state: 'Delhi', lat: 28.6833, lng: 77.2167, type: 'destination' },
@@ -133,7 +137,25 @@ export const INDIAN_CITIES_CATALOG: IndianCity[] = [
   { name: 'Bareilly', district: 'Bareilly', state: 'Uttar Pradesh', lat: 28.3670, lng: 79.4304, type: 'custom' },
   { name: 'Aligarh', district: 'Aligarh', state: 'Uttar Pradesh', lat: 27.8974, lng: 78.0880, type: 'work' },
   { name: 'Rampur', district: 'Rampur', state: 'Uttar Pradesh', lat: 28.8154, lng: 79.0250, type: 'custom' },
+  { name: 'Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8351, lng: 78.7747, type: 'home' },
   { name: 'Moradabad (Brass City)', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8351, lng: 78.7747, type: 'work' },
+  { name: 'Sambhal', district: 'Sambhal', state: 'Uttar Pradesh', lat: 28.5841, lng: 78.5663, type: 'custom' },
+  { name: 'Amroha', district: 'Amroha', state: 'Uttar Pradesh', lat: 28.9044, lng: 78.4684, type: 'custom' },
+  { name: 'Chandausi', district: 'Sambhal', state: 'Uttar Pradesh', lat: 28.4500, lng: 78.7800, type: 'custom' },
+  { name: 'Kashipur', district: 'Udham Singh Nagar', state: 'Uttarakhand', lat: 29.2100, lng: 78.9600, type: 'work' },
+  { name: 'Thakurdwara', district: 'Moradabad', state: 'Uttar Pradesh', lat: 29.1900, lng: 78.8600, type: 'farm' },
+  { name: 'Bilaspur', district: 'Rampur', state: 'Uttar Pradesh', lat: 28.8800, lng: 79.2600, type: 'custom' },
+  { name: 'Dhampur', district: 'Bijnor', state: 'Uttar Pradesh', lat: 29.3100, lng: 78.5100, type: 'custom' },
+  { name: 'Hasanpur', district: 'Amroha', state: 'Uttar Pradesh', lat: 28.7200, lng: 78.2800, type: 'custom' },
+  { name: 'Lajpat Nagar, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8480, lng: 78.7620, type: 'custom' },
+  { name: 'MDA Colony, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8530, lng: 78.7490, type: 'custom' },
+  { name: 'Naveen Nagar, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8560, lng: 78.7640, type: 'custom' },
+  { name: 'Ramganga Vihar, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8650, lng: 78.7600, type: 'custom' },
+  { name: 'Civil Lines, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8450, lng: 78.7650, type: 'work' },
+  { name: 'Majhola, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8200, lng: 78.7500, type: 'custom' },
+  { name: 'Buddhi Vihar, Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8350, lng: 78.7350, type: 'custom' },
+  { name: 'Moradabad Railway Junction (MB)', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8315, lng: 78.7690, type: 'work' },
+  { name: 'Peetal Basti (Brass Hub), Moradabad', district: 'Moradabad', state: 'Uttar Pradesh', lat: 28.8320, lng: 78.7850, type: 'work' },
   { name: 'Saharanpur', district: 'Saharanpur', state: 'Uttar Pradesh', lat: 29.9671, lng: 77.5510, type: 'farm' },
   { name: 'Gorakhpur (Eastern UP)', district: 'Gorakhpur', state: 'Uttar Pradesh', lat: 26.7606, lng: 83.3732, type: 'home' },
   { name: 'Jhansi (Bundelkhand)', district: 'Jhansi', state: 'Uttar Pradesh', lat: 25.4484, lng: 78.5685, type: 'destination' },
@@ -322,19 +344,27 @@ export async function searchAllIndianCities(query: string, limit = 15): Promise<
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.results)) {
-        const remoteMatches: IndianCity[] = data.results.map((r: any) => {
-          const state = cleanStateName(r.admin1 || 'India');
-          const district = cleanDistrictName(r.admin2 || r.name);
-          const name = `${r.name} (${district !== r.name ? district + ', ' : ''}${state})`;
-          return {
-            name,
-            district,
-            state,
-            lat: parseFloat(r.latitude),
-            lng: parseFloat(r.longitude),
-            type: 'custom'
-          };
-        });
+        const remoteMatches: IndianCity[] = data.results
+          .filter((r: any) => {
+            const isCountryIn = r.country_code === 'IN' || (r.country && r.country.toLowerCase() === 'india');
+            const lat = parseFloat(r.latitude);
+            const lng = parseFloat(r.longitude);
+            const isGeoWithinIndia = !isNaN(lat) && !isNaN(lng) && lat >= 6.0 && lat <= 37.5 && lng >= 68.0 && lng <= 98.0;
+            return isCountryIn && isGeoWithinIndia;
+          })
+          .map((r: any) => {
+            const state = cleanStateName(r.admin1 || 'India');
+            const district = cleanDistrictName(r.admin2 || r.name);
+            const name = `${r.name} (${district !== r.name ? district + ', ' : ''}${state})`;
+            return {
+              name,
+              district,
+              state,
+              lat: parseFloat(r.latitude),
+              lng: parseFloat(r.longitude),
+              type: 'custom'
+            };
+          });
 
         GEOCODING_CACHE.set(q, remoteMatches);
         return mergeUniqueCities(localMatches, remoteMatches).slice(0, limit);
@@ -466,5 +496,26 @@ export async function resolveCityInfo(cityNameOrQuery: string): Promise<IndianCi
   }
 
   return undefined;
+}
+
+/**
+ * Finds the closest Indian city or district in the catalog for given geographic coordinates.
+ * Employs Haversine-approximated geodesic Euclidean distance.
+ */
+export function findNearestIndianCity(lat: number, lng: number): IndianCity {
+  let nearest = INDIAN_CITIES_CATALOG[0];
+  let minDistanceSq = Number.MAX_VALUE;
+
+  for (const city of INDIAN_CITIES_CATALOG) {
+    const dLat = (city.lat - lat) * 111.0;
+    const dLng = (city.lng - lng) * 111.0 * Math.cos(((lat + city.lat) / 2 * Math.PI) / 180);
+    const distSq = dLat * dLat + dLng * dLng;
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq;
+      nearest = city;
+    }
+  }
+
+  return nearest;
 }
 

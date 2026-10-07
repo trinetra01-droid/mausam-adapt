@@ -7,7 +7,8 @@ import {
   DecisionResult, 
   PlanRecord, 
   LocationRecord,
-  ProviderStatus
+  ProviderStatus,
+  RainAroundYouReport
 } from '../types.js';
 
 class ApiService {
@@ -111,11 +112,37 @@ class ApiService {
     );
   }
 
+  // RAIN AROUND YOU - Doppler Weather Radar & Spatial Precipitation
+  async getRainAroundYou(
+    lat: number, 
+    lng: number, 
+    district: string, 
+    state: string, 
+    precipMm?: number, 
+    condition?: string
+  ): Promise<RainAroundYouReport> {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      district: district || '',
+      state: state || ''
+    });
+    if (precipMm !== undefined) params.append('precip_mm', String(precipMm));
+    if (condition) params.append('condition', condition);
+
+    return this.request<RainAroundYouReport>(`/api/weather/radar-rain?${params.toString()}`);
+  }
+
   async getWarnings(district?: string, state?: string): Promise<WarningRecord[]> {
     const params = new URLSearchParams();
     if (district) params.append('district', district);
     if (state) params.append('state', state);
-    return this.request<WarningRecord[]>(`/api/weather/warnings?${params.toString()}`);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<WarningRecord[]>(`/api/weather/warnings${qs}`);
+  }
+
+  async getAllWarnings(): Promise<WarningRecord[]> {
+    return this.request<WarningRecord[]>('/api/weather/warnings');
   }
 
   // Marine Endpoints
@@ -187,6 +214,18 @@ class ApiService {
   }
 
   // Locations
+  async detectLocation(lat?: number, lng?: number): Promise<LocationRecord> {
+    const query = (lat !== undefined && lng !== undefined)
+      ? `?lat=${lat}&lng=${lng}`
+      : '';
+    const loc = await this.request<LocationRecord>(`/api/locations/detect${query}`);
+    return {
+      ...loc,
+      latitude: Number(loc.latitude),
+      longitude: Number(loc.longitude)
+    };
+  }
+
   async getLocations(): Promise<LocationRecord[]> {
     const locs = await this.request<LocationRecord[]>('/api/locations');
     return (locs || []).map(l => ({
@@ -217,6 +256,10 @@ class ApiService {
 
   async deleteLocation(id: string): Promise<any> {
     return this.request<any>(`/api/locations/${id}`, { method: 'DELETE' });
+  }
+
+  async clearAllLocations(): Promise<any> {
+    return this.request<any>('/api/locations', { method: 'DELETE' });
   }
 
   // Explore

@@ -81,24 +81,28 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
     ? (propIsDay ? 'light' : 'dark')
     : (theme === 'light' ? 'light' : (!isNight ? 'light' : 'dark'));
 
-  // Resolve Weather State
+  // Resolve Weather State with explicit priority for severe multi-hazard red alerts
   const resolveWeatherState = (): WeatherState => {
+    const c = (condition || '').toLowerCase();
+    const h = (hazardType || '').toLowerCase();
+
+    // Priority 1: Specific severe hazard conditions take immediate priority during alerts
+    if (h.includes('sand') || h.includes('dust') || c.includes('sand') || c.includes('dust')) return 'DUST';
+    if (h.includes('flood') || c.includes('flood') || h.includes('inundat')) return 'FLOOD';
+    if (h.includes('heat') || c.includes('heat') || h.includes('loo') || temperature > 38) return 'HEAT';
+    if (h.includes('heavy rain') || c.includes('heavy rain') || (warningSeverity === 'RED' && (h.includes('rain') || c.includes('rain'))) || rainIntensity > 10) return 'HEAVY_RAIN';
+    if (h.includes('cyclone') || c.includes('cyclone')) return 'CYCLONE';
+    if (c.includes('thunder') || c.includes('lightning') || h.includes('thunder')) return 'THUNDERSTORM';
+
+    // Priority 2: Generic RED alert with unclassified hazard
     if (warningSeverity === 'RED') {
       return 'SYSTEM_OVERRIDE';
     }
 
-    const c = (condition || '').toLowerCase();
-    const h = (hazardType || '').toLowerCase();
-
-    if (h.includes('cyclone') || c.includes('cyclone')) return 'CYCLONE';
-    if (h.includes('flood') || c.includes('flood')) return 'FLOOD';
-    if (c.includes('thunder') || c.includes('lightning') || h.includes('thunder')) return 'THUNDERSTORM';
-    if (c.includes('heavy rain') || rainIntensity > 10) return 'HEAVY_RAIN';
     if (c.includes('rain') || c.includes('drizzle') || c.includes('shower') || rainIntensity > 0.5) return 'LIGHT_RAIN';
     if (c.includes('snow') || c.includes('sleet')) return 'SNOW';
     if (c.includes('fog') || c.includes('mist') || visibility < 2.0) return 'FOG';
     if (c.includes('dust') || c.includes('sand') || c.includes('haze')) return 'DUST';
-    if (temperature > 38 || h.includes('heat')) return 'HEAT';
     if (windSpeed > 35) return 'STRONG_WIND';
     if (c.includes('partly') || c.includes('scattered')) return isNight ? 'PARTLY_CLOUDY_NIGHT' : 'PARTLY_CLOUDY_DAY';
     if (c.includes('overcast') || c.includes('cloud') || c.includes('gloomy')) return 'CLOUDY';
@@ -110,9 +114,10 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
 
   const weatherState = resolveWeatherState();
 
-  // Distant Lightning Glow Effect (Thunderstorm)
+  // Distant Lightning Glow Effect (Thunderstorm, Cyclone, and Severe Storm Alerts)
   useEffect(() => {
-    if (weatherState !== 'THUNDERSTORM' || prefersReducedMotion || intensity === 'focused') {
+    const isStormy = weatherState === 'THUNDERSTORM' || weatherState === 'CYCLONE' || (weatherState === 'HEAVY_RAIN' && warningSeverity === 'RED');
+    if (!isStormy || prefersReducedMotion) {
       setLightningFlash(false);
       return;
     }
@@ -180,9 +185,11 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
 
     const needsStars = isNight && effectiveTheme === 'dark' && (weatherState === 'CLEAR_NIGHT' || weatherState === 'PARTLY_CLOUDY_NIGHT');
     const isRaining = weatherState === 'LIGHT_RAIN' || weatherState === 'HEAVY_RAIN' || weatherState === 'THUNDERSTORM' || weatherState === 'FLOOD';
+    const isHeavyRain = weatherState === 'HEAVY_RAIN' || weatherState === 'FLOOD' || (warningSeverity === 'RED' && isRaining);
     const isSnowing = weatherState === 'SNOW';
     const isWindy = weatherState === 'STRONG_WIND';
     const isDusty = weatherState === 'DUST';
+    const isHeatWave = weatherState === 'HEAT';
     const isDayShimmer = !isNight && (weatherState === 'CLEAR_DAY' || weatherState === 'PARTLY_CLOUDY_DAY');
 
     interface Particle {
@@ -217,6 +224,42 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
           phase: Math.random() * Math.PI * 2
         });
       }
+    } else if (isDusty) {
+      // Sand Storm: high-velocity blowing sand grains & fast-rushing horizontal sand streaks
+      const sandCount = Math.round((isMobile ? 60 : 130) * intensityMultiplier);
+      for (let i = 0; i < sandCount; i++) {
+        const isStreak = Math.random() > 0.6;
+        const speed = 14 + Math.random() * 22;
+        const baseOp = 0.25 + Math.random() * 0.55;
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          length: isStreak ? 25 + Math.random() * 55 : 0,
+          speedX: speed,
+          speedY: -0.5 + Math.random() * 1.0,
+          size: isStreak ? 1.4 : 1.2 + Math.random() * 2.2,
+          opacity: baseOp,
+          baseOpacity: baseOp
+        });
+      }
+    } else if (isHeatWave) {
+      // Heat Storm / Heat Wave: thermal shimmering motes rising in hot convection air drafts
+      const heatCount = Math.round((isMobile ? 24 : 52) * intensityMultiplier);
+      for (let i = 0; i < heatCount; i++) {
+        const baseOp = 0.18 + Math.random() * 0.48;
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          length: 0,
+          speedY: -0.7 - Math.random() * 1.5,
+          speedX: -0.3 + Math.random() * 0.6,
+          size: 1.4 + Math.random() * 2.6,
+          opacity: baseOp,
+          baseOpacity: baseOp,
+          twinkleSpeed: 0.015 + Math.random() * 0.03,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
     } else if (isDayShimmer) {
       // Warm, radiant daylight solar dust & sunbeam particles drifting gently through the atmosphere
       const moteCount = Math.round((isMobile ? 14 : 26) * intensityMultiplier);
@@ -236,19 +279,21 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
         });
       }
     } else if (isRaining) {
-      const baseCount = weatherState === 'HEAVY_RAIN' ? 48 : 28;
-      const rainCount = Math.round((isMobile ? baseCount * 0.5 : baseCount) * intensityMultiplier);
-      const angleSpeedX = weatherState === 'THUNDERSTORM' ? 2.8 : 1.4;
+      // Heavy Rainfall / Flood Downpour vs Gentle Rain
+      const baseCount = isHeavyRain ? 110 : 36;
+      const rainCount = Math.round((isMobile ? baseCount * 0.6 : baseCount) * intensityMultiplier);
+      const angleSpeedX = weatherState === 'THUNDERSTORM' ? 3.8 : isHeavyRain ? 2.4 : 1.4;
       for (let i = 0; i < rainCount; i++) {
+        const speedY = (isHeavyRain ? 20 : 11) + Math.random() * 9;
         particles.push({
-          x: Math.random() * (width + 100) - 50,
+          x: Math.random() * (width + 120) - 60,
           y: Math.random() * height,
-          length: weatherState === 'HEAVY_RAIN' ? 16 + Math.random() * 18 : 10 + Math.random() * 14,
-          speedY: (weatherState === 'HEAVY_RAIN' ? 16 : 10) + Math.random() * 6,
+          length: isHeavyRain ? 22 + Math.random() * 28 : 10 + Math.random() * 14,
+          speedY,
           speedX: angleSpeedX + Math.random() * 0.8,
-          opacity: (weatherState === 'HEAVY_RAIN' ? 0.28 : 0.18) + Math.random() * 0.12,
-          baseOpacity: 0.2,
-          size: 1.2
+          opacity: (isHeavyRain ? 0.35 : 0.18) + Math.random() * 0.16,
+          baseOpacity: 0.25,
+          size: isHeavyRain ? 1.5 : 1.2
         });
       }
     } else if (isSnowing) {
@@ -265,18 +310,18 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
           size: 1.4 + Math.random() * 2
         });
       }
-    } else if (isWindy || isDusty) {
-      const count = Math.round((isMobile ? 14 : 30) * intensityMultiplier);
+    } else if (isWindy) {
+      const count = Math.round((isMobile ? 16 : 34) * intensityMultiplier);
       for (let i = 0; i < count; i++) {
         particles.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          length: isWindy ? 25 + Math.random() * 50 : 2.5,
-          speedX: (isWindy ? 5 : 1.8) + Math.random() * 2.5,
+          length: 25 + Math.random() * 50,
+          speedX: 5.5 + Math.random() * 3.5,
           speedY: -0.2 + Math.random() * 0.4,
-          opacity: 0.12 + Math.random() * 0.16,
-          baseOpacity: 0.14,
-          size: isDusty ? 1.4 + Math.random() * 1.8 : 1.2
+          opacity: 0.14 + Math.random() * 0.18,
+          baseOpacity: 0.16,
+          size: 1.2
         });
       }
     }
@@ -316,13 +361,61 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
           ctx.fillStyle = `rgba(254, 240, 138, ${Math.max(0.08, Math.min(0.65, p.opacity))})`;
           ctx.fill();
         }
+      } else if (isDusty) {
+        // Sand Storm: high-velocity blowing sand grains & fast horizontal sand streaks
+        for (const p of particles) {
+          if (p.length > 0) {
+            ctx.strokeStyle = `rgba(217, 119, 6, ${Math.max(0.15, Math.min(0.75, p.opacity * 0.9))})`;
+            ctx.lineWidth = p.size;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + p.length, p.y + p.speedY * 3);
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(245, 158, 11, ${Math.max(0.12, Math.min(0.85, p.opacity))})`;
+            ctx.fill();
+          }
+
+          p.x += p.speedX;
+          p.y += p.speedY;
+
+          if (p.x > width + 60) {
+            p.x = -60;
+            p.y = Math.random() * height;
+          }
+          if (p.y > height + 20) p.y = -20;
+          if (p.y < -20) p.y = height + 20;
+        }
+      } else if (isHeatWave) {
+        // Heat Storm / Heat Wave: thermal shimmering motes ascending in warm convection currents
+        for (const p of particles) {
+          if (p.twinkleSpeed && p.phase !== undefined) {
+            p.opacity = p.baseOpacity + Math.sin(frame * p.twinkleSpeed + p.phase) * 0.22;
+          }
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(251, 146, 60, ${Math.max(0.08, Math.min(0.75, p.opacity))})`;
+          ctx.fill();
+
+          p.y += p.speedY;
+          p.x += p.speedX + Math.sin(frame * 0.03 + p.y * 0.01) * 0.4;
+
+          if (p.y < -15) {
+            p.y = height + 15;
+            p.x = Math.random() * width;
+          }
+          if (p.x < -20) p.x = width + 20;
+          if (p.x > width + 20) p.x = -20;
+        }
       } else if (isRaining) {
         const strokeCol = theme === 'light'
-          ? (weatherState === 'THUNDERSTORM' ? 'rgba(37, 99, 235, 0.35)' : 'rgba(2, 132, 199, 0.32)')
-          : (weatherState === 'THUNDERSTORM' ? 'rgba(186, 230, 253, 0.3)' : 'rgba(186, 230, 253, 0.22)');
+          ? (weatherState === 'THUNDERSTORM' ? 'rgba(37, 99, 235, 0.4)' : isHeavyRain ? 'rgba(2, 132, 199, 0.38)' : 'rgba(2, 132, 199, 0.28)')
+          : (weatherState === 'THUNDERSTORM' ? 'rgba(186, 230, 253, 0.35)' : isHeavyRain ? 'rgba(186, 230, 253, 0.32)' : 'rgba(186, 230, 253, 0.22)');
 
         ctx.strokeStyle = strokeCol;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = isHeavyRain ? 1.5 : 1.2;
         ctx.beginPath();
 
         for (const p of particles) {
@@ -356,36 +449,21 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
             p.x = Math.random() * width;
           }
         }
-      } else if (isWindy || isDusty) {
-        if (isWindy) {
-          ctx.strokeStyle = theme === 'light' ? 'rgba(100, 116, 139, 0.22)' : 'rgba(226, 232, 240, 0.18)';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          for (const p of particles) {
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x + p.length, p.y + p.speedY * 4);
-            p.x += p.speedX;
-            p.y += p.speedY;
-            if (p.x > width + p.length) {
-              p.x = -p.length;
-              p.y = Math.random() * height;
-            }
-          }
-          ctx.stroke();
-        } else {
-          for (const p of particles) {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(217, 119, 6, ${p.opacity})`;
-            ctx.fill();
-            p.x += p.speedX;
-            p.y += p.speedY;
-            if (p.x > width + 10) {
-              p.x = -10;
-              p.y = Math.random() * height;
-            }
+      } else if (isWindy) {
+        ctx.strokeStyle = theme === 'light' ? 'rgba(100, 116, 139, 0.24)' : 'rgba(226, 232, 240, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const p of particles) {
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + p.length, p.y + p.speedY * 4);
+          p.x += p.speedX;
+          p.y += p.speedY;
+          if (p.x > width + p.length) {
+            p.x = -p.length;
+            p.y = Math.random() * height;
           }
         }
+        ctx.stroke();
       }
 
       animationFrameId = requestAnimationFrame(render);
@@ -456,12 +534,47 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
           };
 
         case 'LIGHT_RAIN':
-        case 'HEAVY_RAIN':
           return {
             background: `
               radial-gradient(ellipse 90% 60% at 50% 20%, rgba(186, 230, 253, 0.55), transparent 70%),
               radial-gradient(ellipse 80% 55% at 25% 65%, rgba(148, 163, 184, 0.5), transparent 65%),
               linear-gradient(180deg, #bfdbfe 0%, #dbeafe 50%, #eff6ff 100%)
+            `
+          };
+
+        case 'HEAVY_RAIN':
+          return {
+            background: `
+              radial-gradient(ellipse 95% 65% at 50% 15%, rgba(15, 23, 42, 0.82), transparent 75%),
+              radial-gradient(ellipse 85% 55% at 25% 60%, rgba(14, 116, 144, 0.4), transparent 65%),
+              linear-gradient(180deg, #334155 0%, #64748b 50%, #94a3b8 100%)
+            `
+          };
+
+        case 'DUST':
+          return {
+            background: `
+              radial-gradient(ellipse 95% 65% at 50% 35%, rgba(245, 158, 11, 0.45), transparent 75%),
+              radial-gradient(ellipse 85% 55% at 85% 75%, rgba(217, 119, 6, 0.4), transparent 65%),
+              linear-gradient(180deg, #d97706 0%, #f59e0b 35%, #fef3c7 100%)
+            `
+          };
+
+        case 'FLOOD':
+          return {
+            background: `
+              radial-gradient(ellipse 95% 65% at 50% 15%, rgba(30, 41, 59, 0.85), transparent 75%),
+              radial-gradient(ellipse 90% 55% at 50% 90%, rgba(8, 145, 178, 0.45), transparent 65%),
+              linear-gradient(180deg, #475569 0%, #64748b 45%, #0e7490 100%)
+            `
+          };
+
+        case 'CYCLONE':
+          return {
+            background: `
+              radial-gradient(ellipse 95% 65% at 50% 15%, rgba(15, 23, 42, 0.9), transparent 75%),
+              radial-gradient(ellipse 85% 55% at 75% 45%, rgba(30, 58, 138, 0.4), transparent 65%),
+              linear-gradient(180deg, #1e293b 0%, #334155 50%, #64748b 100%)
             `
           };
 
@@ -485,9 +598,9 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
         case 'HEAT':
           return {
             background: `
-              radial-gradient(ellipse 95% 60% at 50% 95%, rgba(251, 146, 60, 0.45), transparent 75%),
-              radial-gradient(ellipse 85% 50% at 80% 30%, rgba(254, 240, 138, 0.65), transparent 65%),
-              linear-gradient(180deg, #fed7aa 0%, #ffedd5 40%, #fffbeb 100%)
+              radial-gradient(ellipse 95% 65% at 50% 10%, rgba(239, 68, 68, 0.45), transparent 75%),
+              radial-gradient(ellipse 90% 55% at 50% 90%, rgba(245, 158, 11, 0.5), transparent 65%),
+              linear-gradient(180deg, #f97316 0%, #fb923c 35%, #fef08a 100%)
             `
           };
 
@@ -501,19 +614,35 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
       }
     }
 
-    // If not night, always return daytime clear sky
-    if (!isNight) {
-      return {
-        background: `
-          radial-gradient(ellipse 95% 65% at 85% 10%, rgba(56, 189, 248, 0.55), transparent 70%),
-          radial-gradient(ellipse 80% 55% at 20% 85%, rgba(254, 240, 138, 0.4), transparent 60%),
-          linear-gradient(180deg, #bae6fd 0%, #e0f2fe 35%, #f0f9ff 100%)
-        `
-      };
-    }
-
-    // DARK THEME ATMOSPHERES (Strictly only during real nighttime)
+    // DARK THEME ATMOSPHERES
     switch (weatherState) {
+      case 'DUST':
+        return {
+          background: `
+            radial-gradient(ellipse 90% 55% at 50% 35%, rgba(217, 119, 6, 0.35), transparent 70%),
+            radial-gradient(ellipse 80% 50% at 20% 80%, rgba(120, 53, 15, 0.45), transparent 65%),
+            #0f0b06
+          `
+        };
+
+      case 'FLOOD':
+        return {
+          background: `
+            radial-gradient(ellipse 85% 60% at 50% 15%, rgba(15, 23, 42, 0.95), transparent 70%),
+            radial-gradient(ellipse 90% 50% at 50% 95%, rgba(6, 182, 212, 0.3), transparent 65%),
+            #020617
+          `
+        };
+
+      case 'CYCLONE':
+        return {
+          background: `
+            radial-gradient(ellipse 85% 60% at 50% 20%, rgba(15, 23, 42, 0.95), transparent 70%),
+            radial-gradient(ellipse 75% 45% at 75% 30%, rgba(30, 58, 138, 0.3), transparent 65%),
+            #010309
+          `
+        };
+
       case 'CLEAR_NIGHT':
         return {
           background: `
@@ -826,6 +955,123 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
         </div>
       )}
 
+      {/* Flood Animation in Bottom (Undulating, layered turbulent flood waters surging at the viewport bottom) */}
+      {(weatherState === 'FLOOD' || (hazardType || '').toLowerCase().includes('flood')) && !prefersReducedMotion && (
+        <div className="absolute inset-x-0 bottom-0 pointer-events-none z-0 overflow-hidden select-none h-44 sm:h-56">
+          {/* Deep murky water backing */}
+          <div className="absolute inset-0 bg-gradient-to-t from-cyan-950/90 via-blue-950/70 to-transparent" />
+          
+          {/* Flood Wave 1 - Back surge */}
+          <div 
+            className="absolute -bottom-2 -left-[100%] w-[300%] h-32 opacity-60 text-cyan-900"
+            style={{ animation: 'floodWaveBack 10s ease-in-out infinite alternate' }}
+          >
+            <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="w-full h-full fill-current">
+              <path d="M0,0 C150,40 350,-20 500,20 C650,60 900,-10 1200,15 L1200,120 L0,120 Z" />
+            </svg>
+          </div>
+
+          {/* Flood Wave 2 - Mid water surge */}
+          <div 
+            className="absolute bottom-0 -left-[100%] w-[300%] h-28 opacity-75 text-sky-950"
+            style={{ animation: 'floodWaveMid 7s ease-in-out infinite alternate-reverse' }}
+          >
+            <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="w-full h-full fill-current">
+              <path d="M0,20 C200,-10 400,45 600,10 C800,-25 1000,35 1200,15 L1200,120 L0,120 Z" />
+            </svg>
+          </div>
+
+          {/* Flood Wave 3 - Front foaming water crest */}
+          <div 
+            className="absolute bottom-0 -left-[100%] w-[300%] h-20 opacity-80 text-teal-900/80"
+            style={{ animation: 'floodWaveFront 5s ease-in-out infinite alternate' }}
+          >
+            <svg viewBox="0 0 1200 100" preserveAspectRatio="none" className="w-full h-full fill-current">
+              <path d="M0,15 C180,30 360,-5 540,25 C720,55 900,0 1200,20 L1200,100 L0,100 Z" />
+            </svg>
+          </div>
+
+          {/* Water reflection & foam line */}
+          <div className="absolute bottom-16 sm:bottom-20 inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent blur-[1px] animate-pulse" />
+        </div>
+      )}
+
+      {/* Sand Storm / Dust Storm Animation (Horizontal dust cloud sheets and ochre haze sweeps) */}
+      {(weatherState === 'DUST' || (hazardType || '').toLowerCase().includes('sand') || (hazardType || '').toLowerCase().includes('dust')) && !prefersReducedMotion && (
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden select-none">
+          {/* Ambient Warm Ochre Sand Haze */}
+          <div className="absolute inset-0 bg-amber-950/20 mix-blend-multiply" />
+
+          {/* Sweeping Sand Dust Cloud (Layer 1) */}
+          <div 
+            className="absolute inset-y-0 -left-[100%] w-[300%] opacity-45 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 70% 30% at 30% 40%, rgba(217, 119, 6, 0.35), transparent 70%), radial-gradient(ellipse 80% 40% at 75% 65%, rgba(180, 83, 9, 0.3), transparent 70%)',
+              animation: 'sandHazeSweep 12s linear infinite',
+              filter: 'blur(16px)'
+            }}
+          />
+
+          {/* Sweeping Sand Dust Cloud (Layer 2 - Lower fast gust) */}
+          <div 
+            className="absolute bottom-10 -left-[100%] w-[300%] h-72 opacity-55 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 85% 45% at 50% 60%, rgba(245, 158, 11, 0.38), transparent 75%)',
+              animation: 'sandHazeSweep 8s linear infinite',
+              animationDelay: '-4s',
+              filter: 'blur(12px)'
+            }}
+          />
+        </div>
+      )}
+
+      {/* High Heat Storm & Heat Wave Animation: Intense Blazing Corona & Thermal Shimmer Mirage */}
+      {(weatherState === 'HEAT' || (hazardType || '').toLowerCase().includes('heat')) && !prefersReducedMotion && (
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden select-none">
+          {/* Scorching Overhead Solar Flare & Blazing Corona */}
+          <div 
+            className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full blur-3xl opacity-75 pointer-events-none"
+            style={{
+              background: 'radial-gradient(circle, rgba(251, 146, 60, 0.45) 0%, rgba(239, 68, 68, 0.25) 45%, rgba(245, 158, 11, 0.1) 70%, transparent 85%)',
+              animation: 'heatCoronaPulse 6s ease-in-out infinite alternate'
+            }}
+          />
+
+          {/* Rising Thermal Shimmer Waves (Mirage effect across lower/middle viewport) */}
+          <div className="absolute inset-x-0 bottom-0 h-3/4 opacity-40 pointer-events-none">
+            <div 
+              className="w-full h-full"
+              style={{
+                background: 'linear-gradient(to top, rgba(245, 158, 11, 0.12) 0%, rgba(239, 68, 68, 0.06) 50%, transparent 100%)',
+                animation: 'heatShimmerWave 4s ease-in-out infinite alternate',
+                filter: 'blur(2px)'
+              }}
+            />
+          </div>
+
+          {/* Undulating horizontal heat mirage bands */}
+          <div 
+            className="absolute inset-x-0 bottom-24 h-32 opacity-30 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 90% 40% at 50% 50%, rgba(251, 191, 36, 0.2), transparent 70%)',
+              animation: 'thermalDistortion 5s ease-in-out infinite alternate-reverse'
+            }}
+          />
+        </div>
+      )}
+
+      {/* Dark Ominous Storm Clouds with Rain for Heavy Rainfall */}
+      {(weatherState === 'HEAVY_RAIN' || weatherState === 'FLOOD') && !prefersReducedMotion && (
+        <div 
+          className="absolute -top-16 inset-x-0 h-96 opacity-90 pointer-events-none z-0"
+          style={{
+            background: 'radial-gradient(ellipse 80% 60% at 50% 10%, rgba(15, 23, 42, 0.95), transparent 85%), radial-gradient(ellipse 65% 50% at 80% 25%, rgba(30, 41, 59, 0.85), transparent 75%), radial-gradient(ellipse 70% 45% at 20% 30%, rgba(15, 23, 42, 0.9), transparent 70%)',
+            animation: 'cloudDriftSlow 45s ease-in-out infinite alternate',
+            filter: 'blur(20px)'
+          }}
+        />
+      )}
+
       {/* HTML5 Particle Canvas */}
       <canvas 
         ref={canvasRef} 
@@ -865,6 +1111,66 @@ export const WeatherAtmosphere: React.FC<WeatherAtmosphereProps> = ({
           100% {
             transform: scale(1.08) translate(-10px, 8px);
             opacity: 0.55;
+          }
+        }
+        @keyframes floodWaveBack {
+          0% {
+            transform: translateX(0) scaleY(0.9);
+          }
+          100% {
+            transform: translateX(33.33%) scaleY(1.15);
+          }
+        }
+        @keyframes floodWaveMid {
+          0% {
+            transform: translateX(0) scaleY(1.1);
+          }
+          100% {
+            transform: translateX(-33.33%) scaleY(0.85);
+          }
+        }
+        @keyframes floodWaveFront {
+          0% {
+            transform: translateX(-15%) scaleY(0.95);
+          }
+          100% {
+            transform: translateX(20%) scaleY(1.2);
+          }
+        }
+        @keyframes sandHazeSweep {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(50%);
+          }
+        }
+        @keyframes heatCoronaPulse {
+          0% {
+            transform: translate(-50%, 0) scale(0.92);
+            opacity: 0.6;
+          }
+          100% {
+            transform: translate(-50%, 15px) scale(1.12);
+            opacity: 0.9;
+          }
+        }
+        @keyframes heatShimmerWave {
+          0% {
+            transform: scaleY(0.96) translateY(0);
+          }
+          100% {
+            transform: scaleY(1.06) translateY(-8px);
+          }
+        }
+        @keyframes thermalDistortion {
+          0% {
+            transform: scaleX(0.95) translateY(0);
+            opacity: 0.2;
+          }
+          100% {
+            transform: scaleX(1.05) translateY(-6px);
+            opacity: 0.45;
           }
         }
       `}</style>

@@ -5,12 +5,14 @@ export type WarningSeverity = 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN' | 'NONE';
 export type UserPersona = 
   | 'HEALTH' 
   | 'FITNESS' 
+  | 'BEACH_SURF'
   | 'COASTAL' 
   | 'TRAVEL' 
   | 'FAMILY' 
   | 'AGRICULTURE' 
   | 'COMMUTER' 
   | 'CONSTRUCTION'
+  | 'EVENT_PLANNER'
   | 'EVENT PLANNER';
 
 export type ActivityType = 
@@ -23,6 +25,7 @@ export type ActivityType =
   | 'COASTAL_FISHING'
   | 'BEACH_VISIT'
   | 'COMMUTE'
+  | 'SCHOOL_COMMUTE'
   | 'CONSTRUCTION_WORK'
   | 'HIGHWAY_TRAVEL'
   | 'OUTDOOR_WALK'
@@ -40,6 +43,7 @@ export interface LocationRecord {
   timezone: string;
   type: 'home' | 'work' | 'delivery' | 'school' | 'farm' | 'destination' | 'event' | 'beach' | 'custom';
   is_saved?: boolean;
+  is_auto_detected?: boolean;
 }
 
 export interface WeatherObservation {
@@ -138,6 +142,9 @@ export interface WarningRecord {
   affected_area: string;
   district: string;
   state: string;
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
   valid_from: string;
   valid_until: string;
   issued_at: string;

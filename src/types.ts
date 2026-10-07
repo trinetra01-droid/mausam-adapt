@@ -5,28 +5,28 @@ export type WarningSeverity = 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN' | 'NONE';
 export type UserPersona = 
   | 'HEALTH' 
   | 'FITNESS' 
+  | 'BEACH_SURF' 
   | 'COASTAL' 
   | 'TRAVEL' 
   | 'FAMILY' 
   | 'AGRICULTURE' 
   | 'COMMUTER' 
-  | 'CONSTRUCTION'
-  | 'EVENT PLANNER';
+  | 'EVENT_PLANNER';
 
 export type ActivityType = 
   | 'RUNNING'
   | 'CYCLING'
-  | 'OUTDOOR_EVENT'
-  | 'WEDDING'
+  | 'OUTDOOR_WALK'
+  | 'SPORTS'
+  | 'BEACH_VISIT'
+  | 'COASTAL_FISHING'
+  | 'HIGHWAY_TRAVEL'
+  | 'COMMUTE'
+  | 'SCHOOL_COMMUTE'
   | 'FARMING_SPRAY'
   | 'FARMING_HARVEST'
-  | 'COASTAL_FISHING'
-  | 'BEACH_VISIT'
-  | 'COMMUTE'
-  | 'CONSTRUCTION_WORK'
-  | 'HIGHWAY_TRAVEL'
-  | 'OUTDOOR_WALK'
-  | 'SPORTS';
+  | 'OUTDOOR_EVENT'
+  | 'WEDDING';
 
 export type TransitMode = 'TWO_WHEELER' | 'METRO' | 'TRAIN' | 'CAR_CAB' | 'BUS' | 'AUTO_RICKSHAW' | 'WALK_CYCLE';
 
@@ -53,6 +53,7 @@ export interface LocationRecord {
   timezone: string;
   type: 'home' | 'work' | 'delivery' | 'school' | 'farm' | 'destination' | 'event' | 'beach' | 'custom';
   is_saved?: boolean;
+  is_auto_detected?: boolean;
 }
 
 export interface WeatherObservation {
@@ -150,6 +151,9 @@ export interface WarningRecord {
   affected_area: string;
   district: string;
   state: string;
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
   valid_from: string;
   valid_until: string;
   issued_at: string;
@@ -320,3 +324,150 @@ export interface ProviderStatus {
   consecutive_failures: number;
   compliance_mode: string;
 }
+
+export interface TravelDestination {
+  id: string;
+  name: string;
+  state: string;
+  country: string;
+  temp_c: number;
+  condition: string;
+  rain_probability_pct: number;
+  severe_warning: string | null;
+  visibility_km: number;
+  packing_suggestion: string;
+}
+
+export interface SchoolCommuteProfile {
+  schoolName: string;
+  morningPickupTime: string;
+  afternoonDropoffTime: string;
+  morningStatus: 'FAVORABLE' | 'CAUTION' | 'HAZARD';
+  afternoonStatus: 'FAVORABLE' | 'CAUTION' | 'HAZARD';
+  rainLikelyTime: string | null;
+  visibilityKm: number;
+  severeAlert: string | null;
+}
+
+export interface AgrometGuidance {
+  soilMoistureStatus: string;
+  rainfall24hMm: number;
+  rainfall7dMm: number;
+  frostRisk: 'NONE' | 'LOW' | 'HIGH';
+  frostGuidance: string;
+  seasonalPlantingGuidance: string;
+}
+
+// ============================================================================
+// RAIN AROUND YOU - Spatial Radar Telemetry & Proximity Analysis
+// ============================================================================
+
+export type RainStatusType = 
+  | 'CLEAR_AROUND_YOU'
+  | 'RAIN_NEARBY'
+  | 'RAIN_OVER_YOU'
+  | 'RAIN_APPROACHING'
+  | 'RAIN_MOVING_AWAY';
+
+export type RainIntensityCategory = 'LIGHT' | 'MODERATE' | 'HEAVY' | 'INTENSE';
+
+export interface PrecipitationCell {
+  id: string;
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  intensityDbz: number; // 20 - 65 dBZ
+  rainRateMmPerHour: number; // 0.5 - 45.0 mm/hr
+  category: RainIntensityCategory;
+  distanceFromUserKm: number;
+  bearingDegFromUser: number;
+  bearingCardinal: string;
+  overlappingTown?: string;
+  overlappingDistrict?: string;
+}
+
+export interface RadarMovementVector {
+  directionDeg: number;
+  directionCardinal: string; // e.g. 'East', 'North-East'
+  speedKmh: number;
+  relativeMovement: 'APPROACHING' | 'MOVING_AWAY' | 'STATIONARY' | 'CROSSING';
+  confidence: number;
+  description: string; // e.g. "Radar movement: Rain cells are moving east."
+}
+
+export interface RadarFrame {
+  id: string;
+  timestamp: string; // ISO
+  formattedTimeIST: string; // e.g. "04:00 PM IST"
+  relativeMinutesAgo: number; // e.g. 15 for previous frame, 0 for current frame
+  cells: PrecipitationCell[];
+  frameLabel: 'PREVIOUS_OBSERVATION' | 'CURRENT_OBSERVATION';
+}
+
+export interface NearbyAffectedArea {
+  name: string;
+  district: string;
+  state: string;
+  distanceKm: number;
+  bearingCardinal: string;
+  intensityCategory: RainIntensityCategory;
+  rainRateMmPerHour: number;
+  latitude: number;
+  longitude: number;
+}
+
+export interface SurroundingCityMarker {
+  name: string;
+  district: string;
+  state: string;
+  distanceKm: number;
+  bearingCardinal: string;
+  latitude: number;
+  longitude: number;
+  hasRain?: boolean;
+}
+
+export interface RainAroundYouReport {
+  status: RainStatusType;
+  statusHeadline: string;
+  statusDetail: string;
+  isRainOverUser: boolean;
+  activeCellsCount: number;
+  rainExtentKm: number | null;
+  rainExtentDescription: string;
+  nearestCellDistanceKm: number | null;
+  nearestCellBearing: string | null;
+  maxIntensityDbz: number;
+  maxRainRateMmPerHour: number;
+  overallIntensityCategory: RainIntensityCategory | 'NONE';
+  movement: RadarMovementVector | null;
+  nearbyAffectedAreas: NearbyAffectedArea[];
+  surroundingCities?: SurroundingCityMarker[];
+  frames: RadarFrame[];
+  activeFrameIndex: number;
+  radarStation: {
+    name: string;
+    code: string;
+    latitude: number;
+    longitude: number;
+    distanceKm: number;
+    frequencyBand: string;
+    operationalStatus: 'OPERATIONAL' | 'MAINTENANCE' | 'OFFLINE';
+  };
+  provenance: {
+    source: string; // "IMD Doppler Weather Radar"
+    network: string; // "India Meteorological Department (MoES)"
+    portal: string;
+    updatedAt: string;
+    updatedAtIST: string;
+    freshnessState: FreshnessState; // 'OFFICIAL_LIVE' | 'OFFICIAL_CACHED' | 'OFFICIAL_STALE' | 'UNAVAILABLE' | 'DEMO_DATA'
+  };
+  impactedPlan?: {
+    planId: string;
+    planTitle: string;
+    activity: string;
+    startTime: string;
+    warningMessage: string;
+  } | null;
+}
+

@@ -38,30 +38,29 @@ class DatabaseManager {
 
     const dbUrl = process.env.DATABASE_URL;
     
-    // Production deployments must use the provisioned external PostgreSQL database.
-    // Accept both standard PostgreSQL URL schemes used by hosted providers.
-    const isPostgresUrl = !!dbUrl && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://'));
+    // Check if external Postgres connection is viable (e.g. Supabase, Neon, AWS RDS, Cloud SQL)
+    const isExternalUrl = dbUrl && 
+      (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')) && 
+      !dbUrl.includes('localhost:5432/trinetra_mausam');
 
-    if (process.env.NODE_ENV === 'production' && !isPostgresUrl) {
-      throw new Error('[Database] DATABASE_URL is missing or is not a valid PostgreSQL connection URL.');
-    }
-
-    // Check if external Postgres connection is viable
-    if (isPostgresUrl && !dbUrl!.includes('localhost:5432/trinetra_mausam')) {
+    if (isExternalUrl && dbUrl) {
       try {
-        console.log('[Database] Attempting connection to external PostgreSQL...');
+        console.log('[Database] Connecting to external PostgreSQL database...');
+        const isSslNeeded = dbUrl.includes('sslmode=') || 
+                            dbUrl.includes('supabase.co') || 
+                            dbUrl.includes('pooler.supabase.com') || 
+                            process.env.NODE_ENV === 'production';
+
         const pool = new Pool({
           connectionString: dbUrl,
-          connectionTimeoutMillis: 3000,
+          connectionTimeoutMillis: 8000,
+          ssl: isSslNeeded ? { rejectUnauthorized: false } : undefined
         });
         await pool.query('SELECT 1');
         this.pgPool = pool;
         this.isExternalPg = true;
-        console.log('[Database] Connected to external PostgreSQL database.');
+        console.log('[Database] Successfully connected to external PostgreSQL database.');
       } catch (err: any) {
-        if (process.env.NODE_ENV === 'production') {
-          throw new Error('[Database] External PostgreSQL connection failed in production: ' + err.message);
-        }
         console.warn('[Database] External PostgreSQL unreachable, falling back to embedded persistent PostgreSQL (PGlite).', err.message);
       }
     }
@@ -407,30 +406,6 @@ class DatabaseManager {
     // Check if initial locations exist
     const locCheck = await this.executeQuery('SELECT COUNT(*) as count FROM locations');
     const locCount = parseInt(locCheck.rows[0]?.count || '0', 10);
-
-    if (locCount === 0) {
-      console.log('[Database] Seeding initial Indian key metropolises and strategic climate locations...');
-      const seedLocations = [
-        { id: 'loc-delhi', name: 'New Delhi (Safdarjung)', lat: 28.5847, lng: 77.2066, district: 'New Delhi', state: 'Delhi', type: 'home' },
-        { id: 'loc-mumbai', name: 'Mumbai (Colaba / Coastal)', lat: 18.9067, lng: 72.8147, district: 'Mumbai City', state: 'Maharashtra', type: 'beach' },
-        { id: 'loc-bengaluru', name: 'Bengaluru (IMD Bengaluru)', lat: 12.9716, lng: 77.5946, district: 'Bengaluru Urban', state: 'Karnataka', type: 'work' },
-        { id: 'loc-chennai', name: 'Chennai (Meenambakkam)', lat: 12.9941, lng: 80.1808, district: 'Chennai', state: 'Tamil Nadu', type: 'destination' },
-        { id: 'loc-kolkata', name: 'Kolkata (Alipore)', lat: 22.5333, lng: 88.3333, district: 'Kolkata', state: 'West Bengal', type: 'destination' },
-        { id: 'loc-shimla', name: 'Shimla (Hill Station)', lat: 31.1048, lng: 77.1734, district: 'Shimla', state: 'Himachal Pradesh', type: 'custom' },
-        { id: 'loc-kochi', name: 'Kochi (Port / Coastal)', lat: 9.9312, lng: 76.2673, district: 'Ernakulam', state: 'Kerala', type: 'beach' },
-        { id: 'loc-nagpur', name: 'Nagpur (Central India Agromet)', lat: 21.1458, lng: 79.0882, district: 'Nagpur', state: 'Maharashtra', type: 'farm' },
-        { id: 'loc-bhubaneswar', name: 'Bhubaneswar (Coastal Odisha)', lat: 20.2961, lng: 85.8245, district: 'Khordha', state: 'Odisha', type: 'custom' },
-        { id: 'loc-guwahati', name: 'Guwahati (Brahmaputra Basin)', lat: 26.1445, lng: 91.7362, district: 'Kamrup Metropolitan', state: 'Assam', type: 'custom' }
-      ];
-
-      for (const loc of seedLocations) {
-        await this.executeQuery(
-          `INSERT INTO locations (id, name, latitude, longitude, district, state, country, timezone, type, is_saved)
-           VALUES ($1, $2, $3, $4, $5, $6, 'India', 'Asia/Kolkata', $7, true)`,
-          [loc.id, loc.name, loc.lat, loc.lng, loc.district, loc.state, loc.type]
-        );
-      }
-    }
 
     // Seed provider statuses
     const provCheck = await this.executeQuery('SELECT COUNT(*) as count FROM provider_status');

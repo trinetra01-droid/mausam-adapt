@@ -218,10 +218,11 @@ export class DecisionEngine {
   }
 
   private static scoreRainSuitability(rainProb: number, rainMm: number): number {
-    if (rainMm > 15 || rainProb > 80) return 10;
-    if (rainMm > 5 || rainProb > 60) return 30;
-    if (rainMm > 0.5 || rainProb > 40) return 55;
-    if (rainProb > 20) return 80;
+    if (rainMm > 12 || rainProb > 80) return 0;
+    if (rainMm > 4 || rainProb > 65) return 10;
+    if (rainMm > 1.5 || rainProb > 45) return 25;
+    if (rainMm > 0.5 || rainProb > 30) return 50;
+    if (rainProb > 15) return 80;
     return 100;
   }
 
@@ -328,7 +329,13 @@ export class DecisionEngine {
           humiditySuitability: 0.05
         };
         if (tempC > 32) risks.push(`Thermal stress: Ambient temperature is ${tempC}°C`);
-        if (rainProbPct > 50) risks.push(`Rain probability is high (${rainProbPct}%)`);
+        if (rainMm >= 4 || rainProbPct >= 65) {
+          risks.push(
+            `HEAVY RAINFALL HAZARD: ${rainMm > 0 ? rainMm + ' mm/hr rainfall' : rainProbPct + '% rain probability'} makes outdoor running completely unsuitable. Slick waterlogged surfaces, zero shoe traction, and dangerously reduced vehicular visibility make running hazardous. Indoor treadmill advised.`
+          );
+        } else if (rainProbPct > 40 || rainMm > 1) {
+          risks.push(`Precipitation risk (${rainProbPct}% probability / ${rainMm} mm): Wet surfaces reduce shoe grip and increase skidding risk.`);
+        }
         if (aqi > 200) risks.push(`Unhealthy air quality (AQI ${aqi}) - lung strain risk`);
         if (tempC <= 26 && rainProbPct < 20 && aqi <= 100) {
           reasons.push('Favorable ambient temperature and clean air for cardiovascular exertion');
@@ -474,49 +481,28 @@ export class DecisionEngine {
         }
         break;
 
-      case 'CONSTRUCTION_WORK':
-        // Civil Engineering & Site Persona: Wind (Cranes/Scaffolding), Rain (Concrete/Pave), AQI (Dust), Temp (Heat stress)
+      case 'SCHOOL_COMMUTE':
+        // Parents & Families Persona: School commute timing, rain alerts, visibility, severe warnings
         weights = {
-          windSuitability: 0.30,
-          rainSuitability: 0.30,
-          aqiSuitability: 0.20,
-          tempSuitability: 0.20
+          rainSuitability: 0.40,
+          visibilitySuitability: 0.25,
+          tempSuitability: 0.20,
+          windSuitability: 0.15
         };
 
-        // 1. Tower Crane & Scaffolding Wind Watch (National Building Code limit: 25 km/h)
-        if (windKmh > 25) {
-          risks.push(
-            `Wind Safety Violation (${windKmh} km/h > 25 km/h): Unsafe for tower crane lifts, suspended gondolas, and high-altitude steel rigging per National Building Code.`
-          );
-        } else if (windKmh <= 15) {
-          reasons.push(`Calm wind conditions (${windKmh} km/h) safe for high-rise scaffolding and crane hoisting.`);
+        // Morning & Afternoon School Hours Evaluation
+        if (targetHour !== undefined && ((targetHour >= 7 && targetHour <= 9) || (targetHour >= 14 && targetHour <= 16))) {
+          if (rainProbPct > 50 || rainMm > 2) {
+            risks.push(`School Transit Hazard: ${rainProbPct}% rain chance during student pickup/dropoff window. Pack raincoat/umbrella and expect delays.`);
+          } else {
+            reasons.push('Favorable transit window for morning/afternoon school commute.');
+          }
         }
-
-        // 2. Concrete Pouring & Slab Casting Precipitation Limit
-        if (rainProbPct > 30 || rainMm > 0) {
-          risks.push(
-            `Concrete Pouring Hazard: Rain probability (${rainProbPct}%) risks cement paste washout, surface pitting, and weak compressive strength in unhardened concrete.`
-          );
-        } else {
-          reasons.push('Dry curing window: Ideal atmospheric conditions for slab concrete pouring, brickwork, and plastering.');
+        if (params.visibilityKm < 1.0) {
+          risks.push(`Low Visibility (${params.visibilityKm} km): Fog/smog hazard for school buses and pedestrian crossings.`);
         }
-
-        // 3. CPCB Anti-Smog & Dust Norms (GRAP)
-        if (aqi > 200) {
-          risks.push(
-            `CPCB Dust Advisory (AQI ${aqi}): Mandatory anti-smog water sprinklers; open soil mounds must be tarpaulin-covered under GRAP construction guidelines.`
-          );
-        } else {
-          reasons.push('Air quality complies with standard construction environmental norms.');
-        }
-
-        // 4. Laborer Thermal Stress / Extreme Temperature
-        if (tempC > 38) {
-          risks.push(
-            `High Heat Stress (${tempC}°C): Risk of heat exhaustion and rapid plastic shrinkage cracks in fresh concrete. Mandate shaded hydration intervals.`
-          );
-        } else if (tempC < 8) {
-          risks.push(`Low Temperature Curing: Ambient temperature (${tempC}°C) delays cement hydration; retardant admixtures required.`);
+        if (tempC > 36) {
+          risks.push(`High Heat Advisory (${tempC}°C): Ensure student hydration and shaded waiting areas.`);
         }
         break;
 
@@ -555,17 +541,25 @@ export class DecisionEngine {
       if (targetHour !== undefined && (targetHour >= 18 || targetHour < 7)) {
         totalScore = Math.min(totalScore, 35);
       }
-    } else if (activity === 'CONSTRUCTION_WORK') {
-      if (windKmh > 25) {
-        totalScore = Math.min(totalScore, 35); // Crane & scaffolding gale hazard
-      } else if (rainProbPct > 45 || rainMm > 2) {
-        totalScore = Math.min(totalScore, 30); // Concrete wash-off hazard
+    } else if (activity === 'SCHOOL_COMMUTE') {
+      if (rainMm > 4 || rainProbPct > 60) {
+        totalScore = Math.min(totalScore, 35); // Heavy rain during school transit
+      } else if (params.visibilityKm < 1.0) {
+        totalScore = Math.min(totalScore, 40); // Fog hazard for school buses
       }
     } else if (activity === 'COMMUTE') {
       if (params.visibilityKm < 0.2) {
         totalScore = Math.min(totalScore, 40); // Dense fog hazardous for transit
       } else if (rainMm > 8) {
         totalScore = Math.min(totalScore, 45); // Waterlogging hazard
+      }
+    } else if (activity === 'RUNNING' || activity === 'CYCLING' || activity === 'OUTDOOR_WALK' || activity === 'SPORTS') {
+      if (rainMm >= 4 || rainProbPct >= 65) {
+        // Heavy rain is unequivocally UNSUITABLE for running/cycling (AVOID)
+        totalScore = Math.min(totalScore, 20);
+      } else if (rainMm >= 1.5 || rainProbPct >= 45) {
+        // Moderate rain: capped at 45 (RISKY/CAUTION)
+        totalScore = Math.min(totalScore, 45);
       }
     }
 
@@ -638,9 +632,9 @@ export class DecisionEngine {
       } else if (activity === 'COASTAL_FISHING') {
         // Artisanal fishing navigation window (04:00 to 18:00 IST)
         if (slot.hour >= 18 || slot.hour < 4) continue;
-      } else if (activity === 'CONSTRUCTION_WORK') {
-        // Active daylight construction shift hours only (07:00 to 18:00 IST)
-        if (slot.hour < 7 || slot.hour >= 18) continue;
+      } else if (activity === 'SCHOOL_COMMUTE') {
+        // School commute windows (07:00 to 09:00 & 14:00 to 16:30 IST)
+        if (!((slot.hour >= 7 && slot.hour <= 9) || (slot.hour >= 14 && slot.hour <= 16))) continue;
       }
 
       let score = 100;
@@ -650,6 +644,11 @@ export class DecisionEngine {
 
       // Evaluate temp and activity specific constraints
       if (activity === 'RUNNING' || activity === 'CYCLING') {
+        if (slot.rainfall_mm >= 4 || slot.rain_probability_pct >= 60) {
+          score -= 75; // Heavy rain is strictly unsuitable for outdoor running
+        } else if (slot.rainfall_mm >= 1.5 || slot.rain_probability_pct >= 40) {
+          score -= 30; // Rain caution
+        }
         if (slot.temperature_c > 32) score -= 35;
         else if (slot.temperature_c >= 18 && slot.temperature_c <= 25) score += 5;
       }
@@ -675,13 +674,10 @@ export class DecisionEngine {
         }
       }
 
-      if (activity === 'CONSTRUCTION_WORK') {
-        if (slot.wind_speed_kmh > 25) score -= 45;
-        if (slot.rain_probability_pct > 30) score -= 40;
-        if (slot.temperature_c > 38) score -= 25;
-        if (slot.rain_probability_pct < 15 && slot.wind_speed_kmh <= 15) {
-          score += 10;
-        }
+      if (activity === 'SCHOOL_COMMUTE') {
+        if (slot.rain_probability_pct > 40 || slot.rainfall_mm > 1.5) score -= 40;
+        if (slot.temperature_c > 36) score -= 25;
+        if (slot.rain_probability_pct < 15) score += 10;
       } else if (activity === 'COMMUTE') {
         if (slot.rain_probability_pct > 40) score -= 25;
         if (slot.rain_probability_pct < 15) score += 5;
@@ -713,11 +709,11 @@ export class DecisionEngine {
         } else if (slot.hour >= 11 && slot.hour <= 14) {
           summary = `Midday window: elevated heat (${slot.temperature_c}°C), spray with caution`;
         }
-      } else if (activity === 'CONSTRUCTION_WORK') {
-        if (slot.rain_probability_pct < 15 && slot.wind_speed_kmh <= 15) {
-          summary = `Prime construction window: ${slot.temperature_c}°C, calm winds (${slot.wind_speed_kmh} km/h), ideal for concrete pouring & scaffolding`;
-        } else if (slot.wind_speed_kmh > 20) {
-          summary = `Breezy conditions (${slot.wind_speed_kmh} km/h): monitor tower cranes and high-altitude scaffolding`;
+      } else if (activity === 'SCHOOL_COMMUTE') {
+        if (slot.rain_probability_pct < 20) {
+          summary = `Safe school transit: ${slot.temperature_c}°C, clear roadways and dry conditions for pickup/dropoff`;
+        } else {
+          summary = `Wet school commute: rain chance ${slot.rain_probability_pct}%, carry umbrella/raincoat and exercise caution`;
         }
       } else if (activity === 'COMMUTE') {
         if (slot.rain_probability_pct < 20) {
@@ -765,6 +761,9 @@ export class DecisionEngine {
     }
     if (status === 'RISKY') {
       return `Caution advised for your ${actLabel} at ${timeLabel}. Weather factors suggest considering an alternative time window.`;
+    }
+    if ((activity === 'RUNNING' || activity === 'CYCLING') && status === 'AVOID') {
+      return `Heavy precipitation makes an outdoor run at ${timeLabel} completely unsuitable. Low vehicular visibility, acute slip hazards, and road waterlogging create severe safety concerns. Shift to indoor treadmill training.`;
     }
     return `Conditions are not recommended for your ${actLabel} at ${timeLabel}. We suggest shifting your activity to an earlier or safer time.`;
   }

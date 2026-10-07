@@ -1,16 +1,18 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 
 export type Theme = 'light' | 'dark';
 
 export interface ThemeContextValue {
   theme: Theme;
   isDay: boolean;
-  overrideTheme: Theme | null;
-  setOverrideTheme: (t: Theme | null) => void;
   toggleTheme: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const ThemeContext = createContext<ThemeContextValue>({
+  theme: 'light',
+  isDay: true,
+  toggleTheme: () => {}
+});
 
 export interface ThemeProviderProps {
   children: React.ReactNode;
@@ -18,54 +20,41 @@ export interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, isDay }) => {
-  const [overrideTheme, setOverrideTheme] = useState<Theme | null>(null);
+  // Respect daytime naturally: Daytime = light liquid glass, Nighttime = dark sleek glass
+  // Allows optional user toggle stored in localStorage
+  const [overrideTheme, setOverrideTheme] = useState<Theme | null>(() => {
+    try {
+      const saved = localStorage.getItem('mausam_theme_preference');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch (_) {}
+    return null;
+  });
 
-  // Natural theme strictly follows isDay unless manually overridden
-  const theme: Theme = overrideTheme !== null ? overrideTheme : (isDay ? 'light' : 'dark');
-
-  // Enforce DOM attributes, classes, and style rules on root and body
-  useEffect(() => {
-    const root = document.documentElement;
-    const body = document.body;
-
-    if (theme === 'light') {
-      root.classList.remove('dark');
-      root.classList.add('light');
-      root.style.colorScheme = 'light';
-      root.setAttribute('data-theme', 'light');
-
-      body.classList.remove('dark');
-      body.classList.add('light');
-      body.style.colorScheme = 'light';
-      body.setAttribute('data-theme', 'light');
-      body.style.backgroundColor = '#f0f9ff';
-      body.style.color = '#0f172a';
-    } else {
-      root.classList.remove('light');
-      root.classList.add('dark');
-      root.style.colorScheme = 'dark';
-      root.setAttribute('data-theme', 'dark');
-
-      body.classList.remove('light');
-      body.classList.add('dark');
-      body.style.colorScheme = 'dark';
-      body.setAttribute('data-theme', 'dark');
-      body.style.backgroundColor = '#030712';
-      body.style.color = '#f3f4f6';
-    }
-  }, [theme]);
+  const activeTheme: Theme = overrideTheme || (isDay ? 'light' : 'dark');
 
   const toggleTheme = () => {
-    setOverrideTheme((prev) => (prev === 'light' ? 'dark' : prev === 'dark' ? 'light' : theme === 'light' ? 'dark' : 'light'));
+    const next = activeTheme === 'light' ? 'dark' : 'light';
+    setOverrideTheme(next);
+    try {
+      localStorage.setItem('mausam_theme_preference', next);
+    } catch (_) {}
   };
 
+  useEffect(() => {
+    if (activeTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
+    }
+  }, [activeTheme]);
+
   const value = useMemo<ThemeContextValue>(() => ({
-    theme,
+    theme: activeTheme,
     isDay,
-    overrideTheme,
-    setOverrideTheme,
     toggleTheme
-  }), [theme, isDay, overrideTheme]);
+  }), [activeTheme, isDay]);
 
   return (
     <ThemeContext.Provider value={value}>
@@ -75,9 +64,5 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, isDay })
 };
 
 export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return ctx;
+  return useContext(ThemeContext);
 }
