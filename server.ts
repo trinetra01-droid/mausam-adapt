@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +37,65 @@ const isProd = process.env.NODE_ENV === 'production' && fs.existsSync(path.resol
 
 // Middleware
 app.set('trust proxy', true);
-app.use(cors());
+
+// 1. Security Headers (Helmet sets Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc.)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+        connectSrc: ["'self'", 'https:', 'wss:', 'ws:'],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// 2. Strict CORS policy (Restricted to controlled origins instead of open '*')
+const configuredOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (such as same-origin requests, mobile apps, or curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Check against user-configured allowed origins
+      if (configuredOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      try {
+        const parsed = new URL(origin);
+        const host = parsed.hostname;
+        if (
+          host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host.endsWith('.antideploy.app') ||
+          host.endsWith('.antideploy.com') ||
+          host.endsWith('.run.app')
+        ) {
+          return callback(null, true);
+        }
+      } catch {
+        // invalid URL format
+      }
+
+      return callback(null, false);
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 // Structured Request Logging & Request IDs
